@@ -3,8 +3,9 @@ package main
 import (
 	"net/http"
 	"log"
+	"chi"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/4epuha1337/yo/db"
 )
 
 var addr = "127.0.0.1:7540"

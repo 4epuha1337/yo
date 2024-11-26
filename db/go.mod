@@ -1,4 +1,4 @@
-module db
+module github.com/4epuha1337/yo/db
 
 go 1.22.4
 
