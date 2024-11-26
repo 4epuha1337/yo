@@ -3,7 +3,7 @@ package main
 import (
 	"net/http"
 	"log"
-	"chi"
+	"github.com/go-chi/chi/v5"
 
 	"github.com/4epuha1337/yo/db"
 )
@@ -19,5 +19,5 @@ func main() {
 		log.Panicf("Start server error: %s", err.Error())
 	}
 
-	checkDB()
+	db.checkDB()
 }
