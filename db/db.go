@@ -1,57 +1,123 @@
 package db
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 
 	"database/sql"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const (
-	SQLCreateScheduler = `
-	CREATE TABLE scheduler (
-	    id      INTEGER PRIMARY KEY, 
-	    date    CHAR(8) NOT NULL DEFAULT "", 
-	    title   TEXT NOT NULL DEFAULT "",
-		comment TEXT NOT NULL DEFAULT "",
-		repeat  VARCHAR(128) NOT NULL DEFAULT "" 
+var DB *sql.DB
+
+type Task struct {
+	ID      string `json:"id"`
+	Date    string `json:"date"`
+	Title   string `json:"title"`
+	Comment string `json:"comment"`
+	Repeat  string `json:"repeat"`
+}
+
+func InitDB() error {
+	var err error
+	DB, err = sql.Open("sqlite3", "./scheduler.db")
+	if err != nil {
+		return err
+	}
+	return DB.Ping()
+}
+
+func CheckDB() error {
+	appDir, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Ошибка при получении директории приложения: %v", err)
+	}
+
+	// Путь к файлу базы данных
+	dbPath := filepath.Join(appDir, "scheduler.db")
+
+	// Проверяем, существует ли файл базы данных
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		DB, err = createDatabase(dbPath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createDatabase(dbPath string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		log.Fatalf("Ошибка при создании базы данных: %v", err)
+	}
+	defer db.Close()
+
+	createTableQuery := `
+	CREATE TABLE IF NOT EXISTS scheduler (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		date TEXT NOT NULL,
+		title TEXT NOT NULL,
+		comment TEXT,
+		repeat TEXT CHECK(LENGTH(repeat) <= 128)
 	);
 	`
-	SQLCreateSchedulerIndex = `
-	CREATE INDEX scheduler_date_index ON scheduler (date)
-	`
-)
-
-var sqlDB *sql.DB
-
-func checkDB() (*sql.DB, error) {
-	appPath, err := os.Executable()
+	_, err = db.Exec(createTableQuery)
 	if err != nil {
-	    log.Fatal(err)
+		return nil, err
 	}
-	dbFile := filepath.Join(filepath.Dir(appPath), "scheduler.db")
-	_, err = os.Stat(dbFile)
 
-	var install bool
+	return db, nil
+}
+
+func AddTask(date, title, comment, repeat string) (int, error) {
+	stmt, err := DB.Prepare("INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)")
 	if err != nil {
- 	   install = true
+		return 0, err
 	}
-	
-	if install {
-		_, err = os.Create(dbFile)
-		if err != nil {
-			return nil, err
-		}
-		sqlDB, err := sql.Open("sqlite3", dbFile)
-		if err != nil {
-			return nil, err
-		}
+	defer stmt.Close()
 
-		if _, err = sqlDB.Exec(SQLCreateScheduler); err != nil {
-			return nil, err
-		}
+	res, err := stmt.Exec(date, title, comment, repeat)
+	if err != nil {
+		return 0, err
 	}
-	return sqlDB, nil
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	return int(id), nil
+}
+
+func GetTasks() ([]Task, error) {
+	db, err := sql.Open("sqlite3", "./scheduler.db")
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date ASC")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tasks: %v", err)
+	}
+	defer rows.Close()
+
+	var tasks []Task
+	for rows.Next() {
+		var task Task
+		if err := rows.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat); err != nil {
+			return nil, fmt.Errorf("failed to scan task: %v", err)
+		}
+		tasks = append(tasks, task)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %v", err)
+	}
+
+	return tasks, nil
 }

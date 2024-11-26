@@ -1,23 +1,39 @@
 package main
 
 import (
-	"net/http"
 	"log"
+	"net/http"
+
+	"fmt"
+
 	"github.com/go-chi/chi/v5"
 
+	"github.com/4epuha1337/yo/api"
 	"github.com/4epuha1337/yo/db"
 )
 
-var addr = "127.0.0.1:7540"
 var webDir = "./web"
 
 func main() {
-	r := chi.NewRouter()
-	r.Handle("/", http.FileServer(http.Dir(webDir)))
-	err := http.ListenAndServe(addr, http.FileServer(http.Dir(webDir)))
+	err := db.CheckDB()
 	if err != nil {
-		log.Panicf("Start server error: %s", err.Error())
+		log.Panicf("Database error: %s", err.Error())
 	}
+	err = db.InitDB()
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer db.DB.Close()
+	r := chi.NewRouter()
 
-	db.checkDB()
+	r.Get("/api/nextdate", api.NextDateHandler)
+	//	r.Get("/api/tasks", api.GetTasks)
+	r.Post("/api/task", api.PostTask)
+
+	r.Handle("/*", http.StripPrefix("/", http.FileServer(http.Dir(webDir))))
+	fmt.Println("Server is running on port 7540...")
+	err = http.ListenAndServe(":7540", r)
+	if err != nil {
+		fmt.Printf("Error starting server: %v\n", err)
+	}
 }
