@@ -27,8 +27,12 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Get("/api/nextdate", api.NextDateHandler)
-	//	r.Get("/api/tasks", api.GetTasks)
+	r.Get("/api/tasks", api.GetTasks)
 	r.Post("/api/task", api.PostTask)
+	r.Get("/api/task", api.GetTask)
+	r.Put("/api/task", api.UpdateTaskHandler)
+	r.Post("/api/task/done", api.MarkTaskDone)
+	r.Delete("/api/task", api.DeleteTask)
 
 	r.Handle("/*", http.StripPrefix("/", http.FileServer(http.Dir(webDir))))
 	fmt.Println("Server is running on port 7540...")
