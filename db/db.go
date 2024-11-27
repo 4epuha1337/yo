@@ -36,10 +36,8 @@ func CheckDB() error {
 		log.Fatalf("Ошибка при получении директории приложения: %v", err)
 	}
 
-	// Путь к файлу базы данных
 	dbPath := filepath.Join(appDir, "scheduler.db")
 
-	// Проверяем, существует ли файл базы данных
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		DB, err = createDatabase(dbPath)
 		if err != nil {
@@ -120,4 +118,20 @@ func GetTasks() ([]Task, error) {
 	}
 
 	return tasks, nil
+}
+
+func GetTaskByID(db *sql.DB, id int64) (*Task, error) {
+	query := `SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?`
+	row := db.QueryRow(query, id)
+
+	var task Task
+	err := row.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("задача с ID %d не найдена", id)
+		}
+		return nil, err
+	}
+
+	return &task, nil
 }
