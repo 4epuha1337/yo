@@ -4,10 +4,7 @@ import (
 	"log"
 	"net/http"
 
-	"fmt"
-
 	"github.com/go-chi/chi/v5"
-
 	"github.com/4epuha1337/yo/api"
 	"github.com/4epuha1337/yo/db"
 )
@@ -35,9 +32,9 @@ func main() {
 	r.Delete("/api/task", api.DeleteTask)
 
 	r.Handle("/*", http.StripPrefix("/", http.FileServer(http.Dir(webDir))))
-	fmt.Println("Server is running on port 7540...")
+	log.Println("Server is running on port 7540...")
 	err = http.ListenAndServe(":7540", r)
 	if err != nil {
-		fmt.Printf("Error starting server: %v\n", err)
+		log.Printf("Error starting server: %v\n", err)
 	}
 }

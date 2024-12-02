@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-
 	"database/sql"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -92,13 +91,7 @@ func AddTask(date, title, comment, repeat string) (int, error) {
 }
 
 func GetTasks() ([]Task, error) {
-	db, err := sql.Open("sqlite3", "./scheduler.db")
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %v", err)
-	}
-	defer db.Close()
-
-	rows, err := db.Query("SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date ASC")
+	rows, err := DB.Query("SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date ASC")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tasks: %v", err)
 	}
@@ -120,7 +113,7 @@ func GetTasks() ([]Task, error) {
 	return tasks, nil
 }
 
-func GetTaskByID(db *sql.DB, id int64) (*Task, error) {
+func getTaskByID(db *sql.DB, id string) (*Task, error) {
 	query := `SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?`
 	row := db.QueryRow(query, id)
 
@@ -128,10 +121,51 @@ func GetTaskByID(db *sql.DB, id int64) (*Task, error) {
 	err := row.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("задача с ID %d не найдена", id)
+			return nil, fmt.Errorf("задача с ID %s не найдена", id)
 		}
 		return nil, err
 	}
 
 	return &task, nil
+}
+
+func GetTaskByID(id string) (*Task, error) {
+	return getTaskByID(DB, id)
+}
+
+func TaskExists(taskID string) bool {
+	var exists bool
+	err := DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM scheduler WHERE id = ?)`, taskID).Scan(&exists)
+	if err != nil {
+		return false
+	}
+	return exists
+}
+
+func UpdateTask(task Task) error {
+	_, err := DB.Exec(`
+		UPDATE scheduler
+		SET date = ?, title = ?, comment = ?, repeat = ?
+		WHERE id = ?`,
+		task.Date, task.Title, task.Comment, task.Repeat, task.ID)
+	return err
+}
+
+func DeleteTaskByID(taskID string) (int64, error) {
+	result, err := DB.Exec("DELETE FROM scheduler WHERE id = ?", taskID)
+	if err != nil {
+		return 0, err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	return rowsAffected, nil
+}
+
+func UpdateTaskDate(taskID string, nextDate string) error {
+	_, err := DB.Exec("UPDATE scheduler SET date = ? WHERE id = ?", nextDate, taskID)
+	return err
 }
