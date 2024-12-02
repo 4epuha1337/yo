@@ -8,8 +8,10 @@ import (
 	"time"
 )
 
+var dateFormat = "20060102"
+
 func NextDate(now time.Time, date string, repeat string) (string, error) {
-	taskDate, err := time.Parse("20060102", date)
+	taskDate, err := time.Parse(dateFormat, date)
 	if err != nil {
 		return "", fmt.Errorf("invalid date format: %v", err)
 	}
@@ -47,5 +49,5 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		}
 	}
 
-	return nextDate.Format("20060102"), nil
+	return nextDate.Format(dateFormat), nil
 }
