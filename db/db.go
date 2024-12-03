@@ -1,11 +1,11 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
-	"database/sql"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -113,7 +113,7 @@ func GetTasks() ([]Task, error) {
 	return tasks, nil
 }
 
-func getTaskByID(db *sql.DB, id string) (*Task, error) {
+func GetTaskByID(db *sql.DB, id string) (*Task, error) {
 	query := `SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?`
 	row := db.QueryRow(query, id)
 
@@ -129,43 +129,43 @@ func getTaskByID(db *sql.DB, id string) (*Task, error) {
 	return &task, nil
 }
 
-func GetTaskByID(id string) (*Task, error) {
-	return getTaskByID(DB, id)
-}
-
-func TaskExists(taskID string) bool {
-	var exists bool
-	err := DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM scheduler WHERE id = ?)`, taskID).Scan(&exists)
-	if err != nil {
-		return false
-	}
-	return exists
-}
-
 func UpdateTask(task Task) error {
-	_, err := DB.Exec(`
+	result, err := DB.Exec(`
 		UPDATE scheduler
 		SET date = ?, title = ?, comment = ?, repeat = ?
 		WHERE id = ?`,
-		task.Date, task.Title, task.Comment, task.Repeat, task.ID)
-	return err
-}
-
-func DeleteTaskByID(taskID string) (int64, error) {
-	result, err := DB.Exec("DELETE FROM scheduler WHERE id = ?", taskID)
+		task.Date, task.Title, task.Comment, task.Repeat, task.ID,
+	)
 	if err != nil {
-		return 0, err
+		return fmt.Errorf("failed to update task: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return 0, err
+		return fmt.Errorf("failed to check rows affected: %w", err)
 	}
 
-	return rowsAffected, nil
+	if rowsAffected == 0 {
+		return fmt.Errorf("task with ID %s does not exist", task.ID)
+	}
+
+	return nil
 }
 
-func UpdateTaskDate(taskID string, nextDate string) error {
-	_, err := DB.Exec("UPDATE scheduler SET date = ? WHERE id = ?", nextDate, taskID)
-	return err
+func DeleteTaskByID(taskID string) error {
+	result, err := DB.Exec("DELETE FROM scheduler WHERE id = ?", taskID)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("task not found")
+	}
+
+	return nil
 }

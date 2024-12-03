@@ -2,10 +2,12 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
-	"encoding/json"
-	"fmt"
+	"strings"
 	"time"
 
 	"github.com/4epuha1337/yo/db"
@@ -128,27 +130,28 @@ func GetTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetTask(w http.ResponseWriter, r *http.Request) {
-	ids := r.URL.Query().Get("id")
-	if ids == "" {
-		http.Error(w, `{"error":"Не указан идентификатор"}`, http.StatusBadRequest)
+	taskID := r.URL.Query().Get("id")
+	if strings.TrimSpace(taskID) == "" {
+		writeErrorResponse(w, "Task ID is required", http.StatusBadRequest)
 		return
 	}
 
-	var id int64
-	_, err := fmt.Sscanf(ids, "%d", &id)
+	if _, err := strconv.Atoi(taskID); err != nil {
+		writeErrorResponse(w, "Invalid Task ID format", http.StatusBadRequest)
+		return
+	}
+
+	task, err := db.GetTaskByID(db.DB, taskID)
 	if err != nil {
-		http.Error(w, `{"error":"Неверный формат идентификатора"}`, http.StatusBadRequest)
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorResponse(w, "Task not found", http.StatusNotFound)
+		} else {
+			writeErrorResponse(w, fmt.Sprintf("Failed to fetch task: %s", err.Error()), http.StatusInternalServerError)
+		}
 		return
 	}
 
-	task, err := db.GetTaskByID(string(id))
-	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(task)
+	writeJSONResponse(w, task)
 }
 
 func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
@@ -180,11 +183,6 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !db.TaskExists(req.ID) {
-		writeErrorResponse(w, "task not found", http.StatusNotFound)
-		return
-	}
-
 	if err := db.UpdateTask(req); err != nil {
 		writeErrorResponse(w, "failed to update task", http.StatusInternalServerError)
 		return
@@ -200,7 +198,7 @@ func MarkTaskDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := db.GetTaskByID(strconv.Itoa(int(taskID)))
+	task, err := db.GetTaskByID(db.DB, strconv.Itoa(int(taskID)))
 	if err != nil {
 		if err == sql.ErrNoRows {
 			writeErrorResponse(w, "task not found", http.StatusNotFound)
@@ -211,7 +209,7 @@ func MarkTaskDone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if task.Repeat == "" {
-		if _, err := db.DeleteTaskByID(strconv.Itoa(int(taskID))); err != nil {
+		if err := db.DeleteTaskByID(strconv.Itoa(int(taskID))); err != nil {
 			writeErrorResponse(w, fmt.Sprintf("failed to delete task: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
@@ -226,7 +224,9 @@ func MarkTaskDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := db.UpdateTaskDate(task.ID, nextDate); err != nil {
+	task.Date = nextDate
+
+	if err := db.UpdateTask(*task); err != nil {
 		writeErrorResponse(w, fmt.Sprintf("failed to update task: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
@@ -235,20 +235,20 @@ func MarkTaskDone(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteTask(w http.ResponseWriter, r *http.Request) {
-	taskID, err := parseIDParam(r, "id")
-	if err != nil {
-		writeErrorResponse(w, err.Error(), http.StatusBadRequest)
+	taskID := r.URL.Query().Get("id")
+	if strings.TrimSpace(taskID) == "" {
+		writeErrorResponse(w, "Task ID is required", http.StatusBadRequest)
 		return
 	}
 
-	rowsAffected, err := db.DeleteTaskByID(strconv.Itoa(int(taskID)))
-	if err != nil {
-		writeErrorResponse(w, fmt.Sprintf("failed to delete task: %s", err.Error()), http.StatusInternalServerError)
+	if _, err := strconv.Atoi(taskID); err != nil {
+		writeErrorResponse(w, "Invalid Task ID format", http.StatusBadRequest)
 		return
 	}
 
-	if rowsAffected == 0 {
-		writeErrorResponse(w, "task not found", http.StatusNotFound)
+	err := db.DeleteTaskByID(taskID)
+	if err != nil {
+		writeErrorResponse(w, fmt.Sprintf("Failed to delete task: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 

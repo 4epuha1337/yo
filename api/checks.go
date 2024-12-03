@@ -1,12 +1,13 @@
 package api
 
 import (
-	"time"
-	"fmt"
-	"strings"
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 )
 
 func validateDate(date string) (string, error) {
@@ -33,13 +34,21 @@ func validateTitle(title string) error {
 	return nil
 }
 
-func writeErrorResponse(w http.ResponseWriter, message string, status int) {
-	http.Error(w, fmt.Sprintf(`{"error":"%s"}`, message), status)
+func writeErrorResponse(w http.ResponseWriter, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	response := map[string]string{"error": message}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode error response: %v", err)
+	}
 }
 
 func writeJSONResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("Failed to encode JSON response: %v", err)
+	}
 }
 
 func parseIDParam(r *http.Request, param string) (int64, error) {
